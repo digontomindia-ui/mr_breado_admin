@@ -55,4 +55,21 @@ export const ordersService = {
       url: endpoints.admin.mrBreado.sendInvoice(id),
       method: "POST",
     }),
+  assignRider: (id: number | string, riderId: string) =>
+    request<SellerOrderDetailResponse>({
+      url: `/admin/mr-breado/orders/${id}/assign-rider`,
+      method: "POST",
+      data: { riderId },
+    }),
+  delivered: (id: number | string) =>
+    request<SellerOrderDetailResponse>({
+      url: `/admin/mr-breado/orders/${id}/delivered`,
+      method: "POST",
+    }),
+  updateStatus: (id: number | string, status: string, reason?: string) =>
+    request<SellerOrderDetailResponse>({
+      url: `/admin/mr-breado/orders/${id}/status`,
+      method: "POST",
+      data: { status, reason },
+    }),
 };

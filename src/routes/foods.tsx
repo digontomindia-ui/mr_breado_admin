@@ -28,12 +28,12 @@ export function FoodsPage({ title, source = "admin" }: { title: string; source?:
   const totalPages = data?.total_pages ?? 1;
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const blankForm = { title: "", subtitle: "", description: "", price: "", discountPrice: "", categoryName: "", foodType: "", stockQuantity: "", isVeg: true, isAvailable: true, isBestseller: false, smallSizeExtra: "", mediumSizeExtra: "", largeSizeExtra: "", cake500gmExtra: "", cake1kgExtra: "", cake15kgExtra: "", cake2kgExtra: "", cakeMessageEnabled: false, cakeMessageCharge: "", customWeightEnabled: false, image: null as File | null };
+  const blankForm = { title: "", subtitle: "", description: "", price: "", discountPrice: "", categoryName: "", foodType: "", stockQuantity: "", isVeg: true, isAvailable: true, isBestseller: false, smallSizeExtra: "", mediumSizeExtra: "", largeSizeExtra: "", cake500gmExtra: "", cake1kgExtra: "", cake15kgExtra: "", cake2kgExtra: "", cakeMessageEnabled: false, cakeMessageCharge: "", customWeightEnabled: false, variantType: "STANDARD", image: null as File | null };
   const [form, setForm] = useState(blankForm);
 
   useEffect(() => {
     if (editing) {
-      setForm({ ...blankForm, title: editing.title ?? editing.name ?? "", subtitle: editing.subtitle ?? "", description: editing.description ?? "", price: String(editing.price ?? ""), discountPrice: String(editing.discountPrice ?? editing.discount_price ?? ""), categoryName: editing.categoryName ?? editing.category_name ?? editing.category ?? "", foodType: editing.foodType ?? editing.food_type ?? "", stockQuantity: String(editing.stockQuantity ?? editing.stock_quantity ?? ""), isVeg: Boolean(editing.isVeg ?? editing.veg ?? editing.is_veg ?? true), isAvailable: Boolean(editing.isAvailable ?? editing.available ?? editing.is_available ?? true), isBestseller: Boolean(editing.isBestseller ?? editing.bestseller ?? editing.is_bestseller ?? false), smallSizeExtra: String(editing.smallSizeExtra ?? editing.small_size_extra ?? ""), mediumSizeExtra: String(editing.mediumSizeExtra ?? editing.medium_size_extra ?? ""), largeSizeExtra: String(editing.largeSizeExtra ?? editing.large_size_extra ?? ""), cake500gmExtra: String(editing.cake500gmExtra ?? editing.cake_500gm_extra ?? ""), cake1kgExtra: String(editing.cake1kgExtra ?? editing.cake_1kg_extra ?? ""), cake15kgExtra: String(editing.cake15kgExtra ?? editing.cake1_5kgExtra ?? editing.cake_1_5kg_extra ?? ""), cake2kgExtra: String(editing.cake2kgExtra ?? editing.cake_2kg_extra ?? ""), cakeMessageEnabled: Boolean(editing.cakeMessageEnabled ?? editing.cake_message_enabled ?? false), cakeMessageCharge: String(editing.cakeMessageCharge ?? editing.cake_message_charge ?? ""), customWeightEnabled: Boolean(editing.customWeightEnabled ?? editing.custom_weight_enabled ?? false), image: null });
+      setForm({ ...blankForm, title: editing.title ?? editing.name ?? "", subtitle: editing.subtitle ?? "", description: editing.description ?? "", price: String(editing.price ?? ""), discountPrice: String(editing.discountPrice ?? editing.discount_price ?? ""), categoryName: editing.categoryName ?? editing.category_name ?? editing.category ?? "", foodType: editing.foodType ?? editing.food_type ?? "", stockQuantity: String(editing.stockQuantity ?? editing.stock_quantity ?? ""), isVeg: Boolean(editing.isVeg ?? editing.veg ?? editing.is_veg ?? true), isAvailable: Boolean(editing.isAvailable ?? editing.available ?? editing.is_available ?? true), isBestseller: Boolean(editing.isBestseller ?? editing.bestseller ?? editing.is_bestseller ?? false), smallSizeExtra: String(editing.smallSizeExtra ?? editing.small_size_extra ?? ""), mediumSizeExtra: String(editing.mediumSizeExtra ?? editing.medium_size_extra ?? ""), largeSizeExtra: String(editing.largeSizeExtra ?? editing.large_size_extra ?? ""), cake500gmExtra: String(editing.cake500gmExtra ?? editing.cake_500gm_extra ?? ""), cake1kgExtra: String(editing.cake1kgExtra ?? editing.cake_1kg_extra ?? ""), cake15kgExtra: String(editing.cake15kgExtra ?? editing.cake1_5kgExtra ?? editing.cake_1_5kg_extra ?? ""), cake2kgExtra: String(editing.cake2kgExtra ?? editing.cake_2kg_extra ?? ""), cakeMessageEnabled: Boolean(editing.cakeMessageEnabled ?? editing.cake_message_enabled ?? false), cakeMessageCharge: String(editing.cakeMessageCharge ?? editing.cake_message_charge ?? ""), customWeightEnabled: Boolean(editing.customWeightEnabled ?? editing.custom_weight_enabled ?? false), variantType: editing.variantType ?? editing.variant_type ?? "STANDARD", image: null });
     } else {
       setForm(blankForm);
     }
@@ -223,14 +223,29 @@ function ModalForm({ open, onClose, form, setForm, onSave, editing }: any) {
           <Field label="Price" value={form.price} onChange={(v:any)=>set("price", v)} />
           <Field label="Discount Price" value={form.discountPrice} onChange={(v:any)=>set("discountPrice", v)} />
           <Field label="Stock Quantity" value={form.stockQuantity} onChange={(v:any)=>set("stockQuantity", v)} />
-          <Field label="Small Size Extra" value={form.smallSizeExtra} onChange={(v:any)=>set("smallSizeExtra", v)} />
-          <Field label="Medium Size Extra" value={form.mediumSizeExtra} onChange={(v:any)=>set("mediumSizeExtra", v)} />
-          <Field label="Large Size Extra" value={form.largeSizeExtra} onChange={(v:any)=>set("largeSizeExtra", v)} />
-          <Field label="Cake 500gm Extra" value={form.cake500gmExtra} onChange={(v:any)=>set("cake500gmExtra", v)} />
-          <Field label="Cake 1kg Extra" value={form.cake1kgExtra} onChange={(v:any)=>set("cake1kgExtra", v)} />
-          <Field label="Cake 1.5kg Extra" value={form.cake15kgExtra} onChange={(v:any)=>set("cake15kgExtra", v)} />
-          <Field label="Cake 2kg Extra" value={form.cake2kgExtra} onChange={(v:any)=>set("cake2kgExtra", v)} />
-          <Field label="Cake Message Charge" value={form.cakeMessageCharge} onChange={(v:any)=>set("cakeMessageCharge", v)} />
+          <label className="block text-sm font-medium">Quantity / Variant Type
+            <select value={form.variantType} onChange={(e:any)=>set("variantType", e.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2">
+              <option value="STANDARD">Standard (Single Unit / Pieces)</option>
+              <option value="PIZZA">Pizza (Sizes: Small, Medium, Large)</option>
+              <option value="CAKE">Cake (Weights: 500gm, 1kg, 1.5kg, 2kg)</option>
+            </select>
+          </label>
+          {form.variantType === "PIZZA" && (
+            <>
+              <Field label="Small Size Extra" value={form.smallSizeExtra} onChange={(v:any)=>set("smallSizeExtra", v)} />
+              <Field label="Medium Size Extra" value={form.mediumSizeExtra} onChange={(v:any)=>set("mediumSizeExtra", v)} />
+              <Field label="Large Size Extra" value={form.largeSizeExtra} onChange={(v:any)=>set("largeSizeExtra", v)} />
+            </>
+          )}
+          {form.variantType === "CAKE" && (
+            <>
+              <Field label="Cake 500gm Extra" value={form.cake500gmExtra} onChange={(v:any)=>set("cake500gmExtra", v)} />
+              <Field label="Cake 1kg Extra" value={form.cake1kgExtra} onChange={(v:any)=>set("cake1kgExtra", v)} />
+              <Field label="Cake 1.5kg Extra" value={form.cake15kgExtra} onChange={(v:any)=>set("cake15kgExtra", v)} />
+              <Field label="Cake 2kg Extra" value={form.cake2kgExtra} onChange={(v:any)=>set("cake2kgExtra", v)} />
+              <Field label="Cake Message Charge" value={form.cakeMessageCharge} onChange={(v:any)=>set("cakeMessageCharge", v)} />
+            </>
+          )}
           <label className="block text-sm font-medium">Image<input type="file" accept="image/*" onChange={(e:any) => set("image", e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-md border border-input px-3 py-2" /></label>
         </div>
         <label className="mt-3 block text-sm font-medium">Description<textarea value={form.description} onChange={(e)=>set("description", e.target.value)} className="mt-1 min-h-24 w-full rounded-md border border-input px-3 py-2" /></label>
@@ -238,8 +253,12 @@ function ModalForm({ open, onClose, form, setForm, onSave, editing }: any) {
           <Toggle label="Veg" value={form.isVeg} onChange={(v:any)=>set("isVeg", v)} />
           <Toggle label="Available" value={form.isAvailable} onChange={(v:any)=>set("isAvailable", v)} />
           <Toggle label="Bestseller" value={form.isBestseller} onChange={(v:any)=>set("isBestseller", v)} />
-          <Toggle label="Cake Message" value={form.cakeMessageEnabled} onChange={(v:any)=>set("cakeMessageEnabled", v)} />
-          <Toggle label="Custom Weight" value={form.customWeightEnabled} onChange={(v:any)=>set("customWeightEnabled", v)} />
+          {form.variantType === "CAKE" && (
+            <>
+              <Toggle label="Cake Message" value={form.cakeMessageEnabled} onChange={(v:any)=>set("cakeMessageEnabled", v)} />
+              <Toggle label="Custom Weight" value={form.customWeightEnabled} onChange={(v:any)=>set("customWeightEnabled", v)} />
+            </>
+          )}
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent">Cancel</button>

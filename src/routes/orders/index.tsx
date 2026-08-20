@@ -23,11 +23,13 @@ import {
   Store,
   ToggleLeft,
   ToggleRight,
+  Bike,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogClose, DialogTitle } from "@/components/ui/dialog";
 import { useOrder, useOrders, orderKeys } from "@/hooks/queries/use-orders";
 import { useOrderAction } from "@/hooks/mutations/use-order-actions";
+import { useDrivers } from "@/hooks/queries/use-drivers";
 import { useDebounce } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/lib/currency";
 import { mrBreadoService } from "@/services/mr-breado.service";
@@ -42,7 +44,7 @@ export const Route = createFileRoute("/orders/")({
 const ACTIVE_STATUSES = new Set(["PENDING", "ACCEPTED", "PREPARING", "READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"]);
 const FINAL_STATUSES = new Set(["DELIVERED", "CANCELLED", "REJECTED"]);
 
-type OrderActionName = "accept" | "preparing" | "ready" | "reject" | "sendInvoice" | "downloadInvoice";
+type OrderActionName = "accept" | "preparing" | "ready" | "reject" | "sendInvoice" | "downloadInvoice" | "delivered";
 
 function normalizeStatus(status?: string) {
   return String(status || "").trim().toUpperCase().replaceAll(" ", "_");
@@ -81,6 +83,7 @@ function isActionAlreadyDone(order: SellerOrderResponse, action: OrderActionName
   if (action === "ready") return ["READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "REJECTED"].includes(status);
   if (action === "reject") return FINAL_STATUSES.has(status);
   if (action === "sendInvoice") return localDone[key] || getStoredAction(order.id, action);
+  if (action === "delivered") return ["DELIVERED", "CANCELLED", "REJECTED"].includes(status);
   return false;
 }
 
@@ -104,6 +107,60 @@ export function OrdersPage({
   const action = useOrderAction();
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const orderDetail = useOrder(selectedOrderId ?? undefined);
+
+  const [selectedRiderId, setSelectedRiderId] = useState("");
+  const [statusToChange, setStatusToChange] = useState("");
+  const [selectedAction, setSelectedAction] = useState<string | null>(null);
+
+  const driversQuery = useDrivers({ page: 1, perPage: 100 });
+  const driversList = driversQuery.data?.items || [];
+
+  function isDriverVerified(r: any) {
+    const status = String(r.verificationStatus ?? "").toUpperCase();
+    if (status) return status === "VERIFIED" || status === "APPROVED";
+    return r.verified === true;
+  }
+
+  function driverActive(r: any) {
+    return Boolean(r.online || r.available) && isDriverVerified(r) && !r.blocked;
+  }
+
+  useEffect(() => {
+    setSelectedRiderId("");
+    setStatusToChange("");
+    setSelectedAction(null);
+  }, [selectedOrderId]);
+
+  const handleAssignRider = () => {
+    if (!selectedOrderId || !selectedRiderId) return;
+    setSelectedAction("assignRider");
+    action.mutate({ id: selectedOrderId, action: "assignRider", riderId: selectedRiderId }, {
+      onSuccess: () => {
+        setSelectedRiderId("");
+        setSelectedAction(null);
+        qc.invalidateQueries({ queryKey: orderKeys.all });
+        qc.invalidateQueries({ queryKey: orderKeys.detail(selectedOrderId) });
+      },
+      onError: () => setSelectedAction(null)
+    });
+  };
+
+  const handleForceStatusChange = () => {
+    if (!selectedOrderId || !statusToChange) return;
+    const confirm = window.confirm(`Are you sure you want to force status change to ${statusToChange}?`);
+    if (!confirm) return;
+    const reason = window.prompt("Reason for force status change?") || "Admin forced change";
+    setSelectedAction("updateStatus");
+    action.mutate({ id: selectedOrderId, action: "updateStatus", status: statusToChange, reason }, {
+      onSuccess: () => {
+        setStatusToChange("");
+        setSelectedAction(null);
+        qc.invalidateQueries({ queryKey: orderKeys.all });
+        qc.invalidateQueries({ queryKey: orderKeys.detail(selectedOrderId) });
+      },
+      onError: () => setSelectedAction(null)
+    });
+  };
 
   const restaurant = useQuery({ queryKey: ["mr-breado", "restaurant"], queryFn: mrBreadoService.restaurant, staleTime: 20_000 });
   const isRestaurantOpen = !!(restaurant.data?.open ?? restaurant.data?.isOpen ?? restaurant.data?.is_open);
@@ -223,6 +280,7 @@ export function OrdersPage({
                 <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Rider</th>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
@@ -252,6 +310,16 @@ export function OrdersPage({
                       <td className="px-4 py-4 text-xs">{payment}</td>
                       <td className="px-4 py-4 font-semibold">{formatCurrency(total)}</td>
                       <td className="px-4 py-4"><StatusBadge status={o.statusLabel || o.status || "PENDING"} /></td>
+                      <td className="px-4 py-4">
+                        {o.riderName ? (
+                          <div className="flex items-center gap-1.5 font-medium text-foreground">
+                            <Bike className="h-4 w-4 text-primary shrink-0" />
+                            <span>{o.riderName}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not Assigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-xs text-muted-foreground">{dateLabel}</td>
                       <td className="px-4 py-4"><OrderActions order={o} isPending={action.isPending} localDone={localDone} onView={() => setSelectedOrderId(o.id)} onAction={runOrderAction} /></td>
                     </tr>
@@ -280,10 +348,11 @@ export function OrdersPage({
               <div className="p-8 text-muted-foreground">Order details are temporarily unavailable. Please try again.</div>
             ) : orderDetail.data ? (
               <div className="space-y-6 p-6">
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-4">
                   <InfoCard icon={<Phone className="h-4 w-4" />} title="Customer" lines={[orderDetail.data.customerName || "Guest", orderDetail.data.customerMobile || "No mobile", orderDetail.data.customerEmail || ""]} />
                   <InfoCard icon={<ReceiptText className="h-4 w-4" />} title="Payment" lines={[[orderDetail.data.paymentType, orderDetail.data.paymentStatus].filter(Boolean).join(" · ") || "—", `Status: ${orderDetail.data.statusLabel || orderDetail.data.status || "—"}`]} />
                   <InfoCard icon={<IndianRupee className="h-4 w-4" />} title="Grand Total" lines={[formatCurrency(orderDetail.data.grandTotal), `Subtotal: ${formatCurrency(orderDetail.data.subtotal)}`]} big />
+                  <InfoCard icon={<Bike className="h-4 w-4" />} title="Rider Details" lines={[orderDetail.data.riderName ? `Rider: ${orderDetail.data.riderName}` : "Rider: Not Assigned", `OTP: ${orderDetail.data.deliveryOtp || "—"}`]} />
                 </div>
 
                 <section className="rounded-2xl border border-border bg-background/30 p-4">
@@ -321,6 +390,86 @@ export function OrdersPage({
                   </div>
                 </section>
 
+                <div className="grid gap-4 md:grid-cols-2">
+                  {orderDetail.data.orderType !== 'TAKEAWAY' && (
+                    <section className="rounded-2xl border border-border bg-background/30 p-4">
+                      <div className="mb-3 flex items-center gap-2 text-base font-bold text-primary">
+                        <Bike className="h-4 w-4" /> Assign Rider
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <select
+                          value={selectedRiderId}
+                          onChange={(e) => setSelectedRiderId(e.target.value)}
+                          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+                        >
+                          <option value="">Select a rider...</option>
+                          {driversList.map((driver: any) => (
+                            <option key={driver.driverId} value={driver.mongoId || driver.driverId || driver.id}>
+                              {driver.driverName} ({driver.driverMobile || "No Mobile"}) {driverActive(driver) ? "· Active" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleAssignRider}
+                          disabled={!selectedRiderId || action.isPending}
+                          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/95 disabled:opacity-50"
+                        >
+                          {action.isPending && selectedAction === "assignRider" ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Assign
+                        </button>
+                      </div>
+                      {orderDetail.data.riderName && (
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          Currently assigned to: <span className="font-semibold text-foreground">{orderDetail.data.riderName}</span>
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  <section className="rounded-2xl border border-border bg-background/30 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-base font-bold text-destructive">
+                      <ToggleRight className="h-4 w-4" /> Force Status Change
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <select
+                        value={statusToChange}
+                        onChange={(e) => setStatusToChange(e.target.value)}
+                        className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+                      >
+                        <option value="">Select new status...</option>
+                        <option value="RECEIVED">RECEIVED</option>
+                        <option value="PENDING_PAYMENT">PENDING_PAYMENT</option>
+                        <option value="ACCEPTED">ACCEPTED</option>
+                        <option value="PREPARING">PREPARING</option>
+                        <option value="READY">READY</option>
+                        <option value="RIDER_ASSIGNMENT_PENDING">RIDER_ASSIGNMENT_PENDING</option>
+                        <option value="RIDER_ASSIGNED">RIDER_ASSIGNED</option>
+                        <option value="PICKED_UP">PICKED_UP</option>
+                        <option value="OUT_FOR_DELIVERY">OUT_FOR_DELIVERY</option>
+                        <option value="REACHED_DROP">REACHED_DROP</option>
+                        <option value="DELIVERED">DELIVERED</option>
+                        <option value="REJECTED">REJECTED</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                      </select>
+                      <button
+                        onClick={handleForceStatusChange}
+                        disabled={!statusToChange || action.isPending}
+                        className="inline-flex items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                      >
+                        {action.isPending && selectedAction === "updateStatus" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Force Update
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Bypasses normal state machine transition rules.
+                    </p>
+                  </section>
+                </div>
+
                 <div className="flex flex-wrap gap-3 border-t border-border pt-5">
                   <OrderActions order={orderDetail.data} isPending={action.isPending} localDone={localDone} onView={() => undefined} onAction={runOrderAction} expanded />
                 </div>
@@ -353,6 +502,7 @@ function OrderActions({ order, isPending, localDone, onView, onAction, expanded 
     <IconAction label="Accept" icon={<Check className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "accept" })} tone="success" disabled={disabled("accept")} />
     <IconAction label="Prep" icon={<ChefHat className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "preparing" })} tone="warning" disabled={disabled("preparing")} />
     <IconAction label="Ready" icon={<PackageCheck className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "ready" })} tone="primary" disabled={disabled("ready")} />
+    <IconAction label="Delivered" icon={<Check className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "delivered" })} tone="success" disabled={disabled("delivered")} />
     <IconAction label={expanded ? "Download Invoice" : "PDF"} icon={<FileDown className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "downloadInvoice", orderNumber: order.orderNumber })} disabled={isPending} />
     <IconAction label={expanded ? "Send Invoice" : "Send"} icon={<Send className="h-4 w-4" />} onClick={() => onAction({ id: order.id, action: "sendInvoice" })} tone="info" disabled={disabled("sendInvoice")} />
     <IconAction label="Reject" icon={<X className="h-4 w-4" />} onClick={reject} tone="danger" disabled={disabled("reject")} />

@@ -5,10 +5,17 @@ import type { AuthResponse, LoginRequest } from "@/types";
 type RawAuthResponse = AuthResponse & {
   access_token?: string;
   token_type?: string;
+  token?: string;
+  data?: Record<string, unknown>;
 };
 
 const normalizeAuthResponse = (raw: RawAuthResponse): AuthResponse => ({
-  accessToken: raw.accessToken ?? raw.access_token ?? "",
+  accessToken:
+    raw.accessToken ??
+    raw.access_token ??
+    raw.token ??
+    (raw.data?.token as string | undefined) ??
+    "",
   tokenType: raw.tokenType ?? raw.token_type ?? "ADMIN",
   data: raw.data,
 });

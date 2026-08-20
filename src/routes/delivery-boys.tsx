@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ServerTable, type ServerColumn, useTableSearch } from "@/components/admin/server-table";
 import { StatusBadge } from "@/components/admin/status-badge";
-import { Bike, CheckCircle2, CreditCard, Eye, ShieldCheck, X } from "lucide-react";
+import { Bike, CheckCircle2, CreditCard, Eye, ShieldCheck, X, Loader2 } from "lucide-react";
 import { useDrivers, useVerifyDriverDeposit, driverKeys } from "@/hooks/queries/use-drivers";
 import { driversService } from "@/services/drivers.service";
 import type { AdminDriverCashResponse } from "@/types";
@@ -104,6 +104,12 @@ function DriversPage() {
 }
 
 function DriverModal({ driver, onClose, onCash, onVerify, onUnverify, busy }: { driver: AdminDriverCashResponse; onClose: () => void; onCash: () => void; onVerify: () => void; onUnverify: () => void; busy: boolean }) {
+  const { data: details, isLoading } = useQuery({
+    queryKey: ["driver", "details", driver.driverId],
+    queryFn: () => driversService.details(driver.driverId),
+    enabled: !!driver.driverId,
+  });
+
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
     <div className="w-full max-w-3xl rounded-2xl border border-border bg-card p-5 shadow-2xl">
       <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-extrabold">{driver.driverName}</h2><p className="text-sm text-muted-foreground">Delivery partner #{driver.driverId}</p></div><button onClick={onClose} className="rounded-lg border border-border p-2 hover:bg-muted"><X className="h-4 w-4" /></button></div>
@@ -118,7 +124,42 @@ function DriverModal({ driver, onClose, onCash, onVerify, onUnverify, busy }: { 
         <Info label="Cash in hand" value={`₹${Number(driver.cashInHand ?? 0).toFixed(2)}`} />
         <Info label="Cash limit" value={`₹${Number(driver.cashLimit ?? 0).toFixed(2)}`} />
       </div>
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
+
+      <div className="mt-6 border-t border-border pt-4">
+        <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5"><Bike className="h-4 w-4 text-primary" /> Assigned Orders ({details?.orders?.length ?? 0})</h3>
+        {isLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : !details?.orders || details.orders.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6 border border-dashed border-border rounded-xl">No active or past orders assigned to this rider.</p>
+        ) : (
+          <div className="max-h-48 overflow-y-auto rounded-xl border border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-background text-muted-foreground uppercase font-bold sticky top-0 border-b border-border">
+                <tr>
+                  <th className="p-2.5">Order #</th>
+                  <th className="p-2.5">Customer</th>
+                  <th className="p-2.5">Restaurant</th>
+                  <th className="p-2.5">Amount</th>
+                  <th className="p-2.5">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {details.orders.map((order: any) => (
+                  <tr key={order.id} className="hover:bg-accent/40">
+                    <td className="p-2.5 font-mono font-bold text-primary">{order.orderNumber || `#${order.id}`}</td>
+                    <td className="p-2.5">{order.customerName || "—"}</td>
+                    <td className="p-2.5">{order.outletName || "—"}</td>
+                    <td className="p-2.5 font-semibold">₹{Number(order.total || 0).toFixed(2)}</td>
+                    <td className="p-2.5"><StatusBadge status={order.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
         <button onClick={onCash} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><CreditCard className="h-4 w-4" />Cash Settlement</button>
         {isDriverVerified(driver) ? <button onClick={onUnverify} disabled={busy} className="rounded-xl border border-red-500/40 px-5 py-3 text-sm font-bold text-red-500 disabled:opacity-50">Mark Unverified</button> : <button onClick={onVerify} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50"><ShieldCheck className="h-4 w-4" />Verify Driver</button>}
       </div>
