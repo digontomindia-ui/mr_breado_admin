@@ -125,25 +125,29 @@ export function FoodsPage({ title, source = "admin" }: { title: string; source?:
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button
-                          onClick={() => update.mutate({ id: p.id, payload: { featured: !p.isFeatured }, source })}
-                          className="rounded p-1.5 text-amber-600 hover:bg-amber-100"
-                          title={p.isFeatured ? "Unfeature" : "Mark as featured"}
-                        >
-                          <Star className="h-4 w-4" />
+                        {source !== "seller" && (
+                          <button
+                            onClick={() => update.mutate({ id: p.id, payload: { featured: !p.isFeatured }, source })}
+                            className="rounded p-1.5 text-amber-600 hover:bg-amber-100"
+                            title={p.isFeatured ? "Unfeature" : "Mark as featured"}
+                          >
+                            <Star className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button className="rounded p-1.5 text-primary hover:bg-primary/10" onClick={() => { setEditing(p); setShowForm(true); }}>
+                          <Pencil className="h-4 w-4" />
                         </button>
-                        <button className="rounded p-1.5 text-primary hover:bg-primary/10">
-                          <Pencil className="h-4 w-4" onClick={() => { setEditing(p); setShowForm(true); }} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Delete "${p.title}"?`)) del.mutate({ id: p.id, source });
-                          }}
-                          disabled={del.isPending}
-                          className="rounded p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {source !== "seller" && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Delete "${p.title}"?`)) del.mutate({ id: p.id, source });
+                            }}
+                            disabled={del.isPending}
+                            className="rounded p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -179,6 +183,7 @@ export function FoodsPage({ title, source = "admin" }: { title: string; source?:
         form={form}
         setForm={setForm}
         editing={editing}
+        source={source}
         onSave={async () => {
           const fd = new FormData();
           Object.entries(form).forEach(([key, value]) => {
@@ -208,23 +213,25 @@ export function FoodsPage({ title, source = "admin" }: { title: string; source?:
 }
 
 // Simple modal form (kept inline to keep changes minimal)
-function ModalForm({ open, onClose, form, setForm, onSave, editing }: any) {
+function ModalForm({ open, onClose, form, setForm, onSave, editing, source }: any) {
   if (!open) return null;
+  const isSeller = source === "seller";
+  const disabled = isSeller && !!editing;
   const set = (key: string, value: any) => setForm((s:any) => ({ ...s, [key]: value }));
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
       <div className="w-full max-w-4xl rounded-xl border border-border bg-card p-5 shadow-card">
-        <h3 className="mb-4 text-lg font-semibold">{editing ? "Edit Food" : "Add Item"}</h3>
+        <h3 className="mb-4 text-lg font-semibold">{editing ? (isSeller ? "Edit Stock" : "Edit Food") : "Add Item"}</h3>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Title" value={form.title} onChange={(v:any)=>set("title", v)} />
-          <Field label="Subtitle" value={form.subtitle} onChange={(v:any)=>set("subtitle", v)} />
-          <Field label="Category" value={form.categoryName} onChange={(v:any)=>set("categoryName", v)} />
-          <Field label="Food Type" value={form.foodType} onChange={(v:any)=>set("foodType", v)} />
-          <Field label="Price" value={form.price} onChange={(v:any)=>set("price", v)} />
-          <Field label="Discount Price" value={form.discountPrice} onChange={(v:any)=>set("discountPrice", v)} />
+          <Field label="Title" value={form.title} onChange={(v:any)=>set("title", v)} disabled={disabled} />
+          <Field label="Subtitle" value={form.subtitle} onChange={(v:any)=>set("subtitle", v)} disabled={disabled} />
+          <Field label="Category" value={form.categoryName} onChange={(v:any)=>set("categoryName", v)} disabled={disabled} />
+          <Field label="Food Type" value={form.foodType} onChange={(v:any)=>set("foodType", v)} disabled={disabled} />
+          <Field label="Price" value={form.price} onChange={(v:any)=>set("price", v)} disabled={disabled} />
+          <Field label="Discount Price" value={form.discountPrice} onChange={(v:any)=>set("discountPrice", v)} disabled={disabled} />
           <Field label="Stock Quantity" value={form.stockQuantity} onChange={(v:any)=>set("stockQuantity", v)} />
           <label className="block text-sm font-medium">Quantity / Variant Type
-            <select value={form.variantType} onChange={(e:any)=>set("variantType", e.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2">
+            <select value={form.variantType} onChange={(e:any)=>set("variantType", e.target.value)} disabled={disabled} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 disabled:opacity-60">
               <option value="STANDARD">Standard (Single Unit / Pieces)</option>
               <option value="PIZZA">Pizza (Sizes: Small, Medium, Large)</option>
               <option value="CAKE">Cake (Weights: 500gm, 1kg, 1.5kg, 2kg)</option>
@@ -232,31 +239,31 @@ function ModalForm({ open, onClose, form, setForm, onSave, editing }: any) {
           </label>
           {form.variantType === "PIZZA" && (
             <>
-              <Field label="Small Size Extra" value={form.smallSizeExtra} onChange={(v:any)=>set("smallSizeExtra", v)} />
-              <Field label="Medium Size Extra" value={form.mediumSizeExtra} onChange={(v:any)=>set("mediumSizeExtra", v)} />
-              <Field label="Large Size Extra" value={form.largeSizeExtra} onChange={(v:any)=>set("largeSizeExtra", v)} />
+              <Field label="Small Size Extra" value={form.smallSizeExtra} onChange={(v:any)=>set("smallSizeExtra", v)} disabled={disabled} />
+              <Field label="Medium Size Extra" value={form.mediumSizeExtra} onChange={(v:any)=>set("mediumSizeExtra", v)} disabled={disabled} />
+              <Field label="Large Size Extra" value={form.largeSizeExtra} onChange={(v:any)=>set("largeSizeExtra", v)} disabled={disabled} />
             </>
           )}
           {form.variantType === "CAKE" && (
             <>
-              <Field label="Cake 500gm Extra" value={form.cake500gmExtra} onChange={(v:any)=>set("cake500gmExtra", v)} />
-              <Field label="Cake 1kg Extra" value={form.cake1kgExtra} onChange={(v:any)=>set("cake1kgExtra", v)} />
-              <Field label="Cake 1.5kg Extra" value={form.cake15kgExtra} onChange={(v:any)=>set("cake15kgExtra", v)} />
-              <Field label="Cake 2kg Extra" value={form.cake2kgExtra} onChange={(v:any)=>set("cake2kgExtra", v)} />
-              <Field label="Cake Message Charge" value={form.cakeMessageCharge} onChange={(v:any)=>set("cakeMessageCharge", v)} />
+              <Field label="Cake 500gm Extra" value={form.cake500gmExtra} onChange={(v:any)=>set("cake500gmExtra", v)} disabled={disabled} />
+              <Field label="Cake 1kg Extra" value={form.cake1kgExtra} onChange={(v:any)=>set("cake1kgExtra", v)} disabled={disabled} />
+              <Field label="Cake 1.5kg Extra" value={form.cake15kgExtra} onChange={(v:any)=>set("cake15kgExtra", v)} disabled={disabled} />
+              <Field label="Cake 2kg Extra" value={form.cake2kgExtra} onChange={(v:any)=>set("cake2kgExtra", v)} disabled={disabled} />
+              <Field label="Cake Message Charge" value={form.cakeMessageCharge} onChange={(v:any)=>set("cakeMessageCharge", v)} disabled={disabled} />
             </>
           )}
-          <label className="block text-sm font-medium">Image<input type="file" accept="image/*" onChange={(e:any) => set("image", e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-md border border-input px-3 py-2" /></label>
+          <label className="block text-sm font-medium">Image<input type="file" accept="image/*" onChange={(e:any) => set("image", e.target.files?.[0] ?? null)} disabled={disabled} className="mt-1 w-full rounded-md border border-input px-3 py-2 disabled:opacity-60" /></label>
         </div>
-        <label className="mt-3 block text-sm font-medium">Description<textarea value={form.description} onChange={(e)=>set("description", e.target.value)} className="mt-1 min-h-24 w-full rounded-md border border-input px-3 py-2" /></label>
+        <label className="mt-3 block text-sm font-medium">Description<textarea value={form.description} onChange={(e)=>set("description", e.target.value)} disabled={disabled} className="mt-1 min-h-24 w-full rounded-md border border-input px-3 py-2 disabled:opacity-60" /></label>
         <div className="mt-4 grid gap-2 md:grid-cols-3">
-          <Toggle label="Veg" value={form.isVeg} onChange={(v:any)=>set("isVeg", v)} />
-          <Toggle label="Available" value={form.isAvailable} onChange={(v:any)=>set("isAvailable", v)} />
-          <Toggle label="Bestseller" value={form.isBestseller} onChange={(v:any)=>set("isBestseller", v)} />
+          <Toggle label="Veg" value={form.isVeg} onChange={(v:any)=>set("isVeg", v)} disabled={disabled} />
+          <Toggle label="Available" value={form.isAvailable} onChange={(v:any)=>set("isAvailable", v)} disabled={disabled} />
+          <Toggle label="Bestseller" value={form.isBestseller} onChange={(v:any)=>set("isBestseller", v)} disabled={disabled} />
           {form.variantType === "CAKE" && (
             <>
-              <Toggle label="Cake Message" value={form.cakeMessageEnabled} onChange={(v:any)=>set("cakeMessageEnabled", v)} />
-              <Toggle label="Custom Weight" value={form.customWeightEnabled} onChange={(v:any)=>set("customWeightEnabled", v)} />
+              <Toggle label="Cake Message" value={form.cakeMessageEnabled} onChange={(v:any)=>set("cakeMessageEnabled", v)} disabled={disabled} />
+              <Toggle label="Custom Weight" value={form.customWeightEnabled} onChange={(v:any)=>set("customWeightEnabled", v)} disabled={disabled} />
             </>
           )}
         </div>
@@ -268,5 +275,5 @@ function ModalForm({ open, onClose, form, setForm, onSave, editing }: any) {
     </div>
   );
 }
-function Field({ label, value, onChange }: any) { return <label className="block text-sm font-medium">{label}<input value={value ?? ""} onChange={(e)=>onChange(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2" /></label>; }
-function Toggle({ label, value, onChange }: any) { return <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm font-medium"><span>{label}</span><input type="checkbox" checked={!!value} onChange={(e)=>onChange(e.target.checked)} /></label>; }
+function Field({ label, value, onChange, disabled }: any) { return <label className="block text-sm font-medium">{label}<input value={value ?? ""} onChange={(e)=>onChange(e.target.value)} disabled={disabled} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 disabled:opacity-60" /></label>; }
+function Toggle({ label, value, onChange, disabled }: any) { return <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm font-medium disabled:opacity-60"><span>{label}</span><input type="checkbox" checked={!!value} onChange={(e)=>onChange(e.target.checked)} disabled={disabled} /></label>; }

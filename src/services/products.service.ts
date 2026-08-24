@@ -23,8 +23,17 @@ function toFormData(payload: Record<string, unknown> | FormData): FormData {
 const isAdmin = (source?: string) => source === "admin";
 
 export const productsService = {
-  list: (params: ProductsQuery = {}) =>
-    request<PageResponse<ProductResponse>>({
+  list: (params: ProductsQuery = {}) => {
+    if (params.source === "seller") {
+      return request<PageResponse<ProductResponse>>({
+        url: "/seller/products",
+        method: "GET",
+        params: {
+          search: params.search || undefined,
+        },
+      });
+    }
+    return request<PageResponse<ProductResponse>>({
       url: isAdmin(params.source) ? endpoints.admin.mrBreado.products : endpoints.admin.products,
       method: "GET",
       params: {
@@ -33,7 +42,8 @@ export const productsService = {
         perPage: params.perPage ?? 20,
         search: params.search || undefined,
       },
-    }),
+    });
+  },
 
   detail: (id: number | string, source?: "seller" | "admin") =>
     request<ProductResponse>({
@@ -43,32 +53,58 @@ export const productsService = {
 
   create: (payload: Record<string, unknown> | FormData, source: "seller" | "admin" = "admin") =>
     request<ProductResponse>({
-      url: isAdmin(source) ? endpoints.admin.mrBreado.products : endpoints.admin.products,
+      url: source === "seller" ? "/seller/products" : (isAdmin(source) ? endpoints.admin.mrBreado.products : endpoints.admin.products),
       method: "POST",
       data: toFormData(payload),
       headers: { "Content-Type": "multipart/form-data" },
     }),
 
-  update: (id: number | string, payload: Record<string, unknown> | FormData, source: "seller" | "admin" = "admin") =>
-    request<ProductResponse>({
+  update: (id: number | string, payload: Record<string, unknown> | FormData, source: "seller" | "admin" = "admin") => {
+    if (source === "seller") {
+      let stockQuantity: number | string = 0;
+      if (payload instanceof FormData) {
+        stockQuantity = payload.get("stockQuantity") || payload.get("stock") || 0;
+      } else {
+        stockQuantity = payload.stockQuantity || payload.stock || 0;
+      }
+      return request<ProductResponse>({
+        url: `/seller/products/${id}`,
+        method: "PUT",
+        data: { stockQuantity: Number(stockQuantity) },
+      });
+    }
+    return request<ProductResponse>({
       url: isAdmin(source) ? endpoints.admin.mrBreado.productById(id) : endpoints.admin.productById(id),
       method: "PUT",
       data: toFormData(payload),
       headers: { "Content-Type": "multipart/form-data" },
-    }),
+    });
+  },
 
-  remove: (id: number | string, source: "seller" | "admin" = "admin") =>
-    request<null>({
+  remove: (id: number | string, source: "seller" | "admin" = "admin") => {
+    if (source === "seller") {
+      throw new Error("Sellers are not allowed to delete products");
+    }
+    return request<null>({
       url: isAdmin(source) ? endpoints.admin.mrBreado.productById(id) : endpoints.admin.productById(id),
       method: "DELETE",
-    }),
+    });
+  },
 
-  setAvailability: (id: number | string, isAvailable: boolean, source: "seller" | "admin" = "admin") =>
-    request<ProductResponse>({
+  setAvailability: (id: number | string, isAvailable: boolean, source: "seller" | "admin" = "admin") => {
+    if (source === "seller") {
+      return request<ProductResponse>({
+        url: `/seller/products/${id}/availability`,
+        method: "PATCH",
+        data: { available: isAvailable },
+      });
+    }
+    return request<ProductResponse>({
       url: isAdmin(source) ? endpoints.admin.mrBreado.productAvailability(id) : endpoints.admin.productStock(id),
       method: "PATCH",
       data: { isAvailable, inStock: isAvailable, in_stock: isAvailable },
-    }),
+    });
+  },
 
   downloadTemplate: async () => {
     const blob = await downloadBlob({ url: endpoints.admin.mrBreado.template, method: "GET" });
